@@ -17,6 +17,15 @@ Eventually more capable desktop databases like Microsoft Access came into pictur
 DBF file format still remains one of the simplest way to store and transfer data.
 
 
+# Fork specific changes on https://github.com/jourquin/javadbf
+
+JavaDBF has a very similar API to the old one used in [Nodus](https://github.com/jourquin/Nodus). The latest is, however, limited
+and is not able to properly handle most DBF "dialects" that appeared after the original DBase III specs. 
+
+As JavaDBF is published under the LGPL v3 license, the changes made to the original code are made available. The changes are listed
+in [ForkSpecificChanges](ForkSpecificChanges.md). 
+
+
 # News and changes in version 1.0.0
 
 ## Possible breaking changes
@@ -63,7 +72,7 @@ It is designed this way because JavaDBF is not intended to support full-blown RD
 And you are not supposed to use it like a back-end; it just doesn't work that way. 
 Also, JavaDBF is not designed to be thread-safe; keep that in mind when you design multithreaded applications.
 
-JavaDBF comes in the package com.linuxense.javadbf. 
+JavaDBF comes in the package edu.uclouvain.core.nodus.database.dbf. 
 Import that package in your Java code. Following examples will familiarise you with its APIs. 
 
 # Data Type Mapping
@@ -116,7 +125,7 @@ Copy/paste this listing and compile it. Keep a .dbf file handy to pass to this p
 
 ```java
 import java.io.*;
-import com.linuxense.javadbf.*;
+import edu.uclouvain.core.nodus.database.dbf.*;
 
 public class JavaDBFReaderTest {
 
@@ -180,7 +189,7 @@ You must use nextRow instead nextRecord
 
 import java.io.*;
 
-import com.linuxense.javadbf.*;
+import edu.uclouvain.core.nodus.database.dbf.*;
 
 public class JavaDBFReaderWithFieldNamesTest {
 
@@ -239,7 +248,7 @@ You can specify memo file to read Memo fields from. If you don't specify this fi
 
 ```java
 import java.io.*;
-import com.linuxense.javadbf.*;
+import edu.uclouvain.core.nodus.database.dbf.*;
 
 public class JavaDBFReaderMemoTest {
 
@@ -309,7 +318,7 @@ This Object array is supposed contain values for the fields added with one-to-on
 Following is a complete program explaining all the steps described above:
 
 ```java
-import com.linuxense.javadbf.*;
+import edu.uclouvain.core.nodus.database.dbf.*;
 import java.io.*;
 
 public class JavaDBFWriterTest {
@@ -385,7 +394,7 @@ And you are done! But, as in the normal mode, remember to call close() when have
 This will help JavaDBF to write the meta data with correct values. Here is a sample code:
 
 ```java
-import com.linuxense.javadbf.*;
+import edu.uclouvain.core.nodus.database.dbf.*;
 import java.io.*;
 
 public class DBFWriterTest {
@@ -421,7 +430,7 @@ It is illegal to call setFields in DBFWriter object created for appending.
 Here also it is required to call the close() method after adding all the records.
 
 ```java
-import com.linuxense.javadbf.*;
+import edu.uclouvain.core.nodus.database.dbf.*;
 import java.io.*;
 
 public class DBFWriterTest {

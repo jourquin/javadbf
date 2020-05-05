@@ -46,7 +46,7 @@ use it like a back-end; it just doesn't work that way. Also, JavaDBF is
 not designed to be thread-safe; keep that in mind when you design
 threaded applications.
 
-JavaDBF comes in the package `com.linuxense.javadbf`. Import that
+JavaDBF comes in the package `edu.uclouvain.core.nodus.database.dbf`. Import that
 package in your Java code. Following examples will familiarise you with
 its APIs.
 
@@ -73,7 +73,7 @@ of the `DBFReader` class. Copy/paste this listing and compile it. Keep a
 
 ```java
     import java.io.*;
-    import com.linuxense.javadbf.*;
+    import edu.uclouvain.core.nodus.database.dbf.*;
 
     public class JavaDBFReaderTest {
 
@@ -176,7 +176,7 @@ Following is a complete program explaining all the steps described
 above:
 
 ```java
-    import com.linuxense.javadbf.*;
+    import edu.uclouvain.core.nodus.database.dbf.*;
     import java.io.*;
 
     public class DBFWriterTest {
@@ -259,7 +259,7 @@ mode, remember to call `write()` when have added all the records. This
 will help JavaDBF to write the meta data with correct values. Here is a
 sample code:
 ```java
-    import com.linuxense.javadbf.*;
+    import edu.uclouvain.core.nodus.database.dbf.*;
     import java.io.*;
 
     public class DBFWriterTest {
