@@ -17,7 +17,7 @@ Eventually more capable desktop databases like Microsoft Access came into pictur
 DBF file format still remains one of the simplest way to store and transfer data.
 
 
-# Fork specific changes on https://github.com/jourquin/javadbf
+# JavaDBF4Nodus: fork specific changes
 
 JavaDBF has a very similar API to the old one used in [Nodus](https://github.com/jourquin/Nodus). The latest is, however, limited
 and is not able to properly handle most DBF "dialects" that appeared after the original DBase III specs. 
