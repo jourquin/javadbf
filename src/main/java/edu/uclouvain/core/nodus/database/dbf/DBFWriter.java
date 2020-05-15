@@ -530,7 +530,7 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
    * @param fields fields definitions.
    */
   public DBFWriter(String fileName, DBFField[] fields) {
-    this(new File(fileName), true, StandardCharsets.UTF_8);
+    this(new File(fileName), true);
     setFields(fields);
   }
 

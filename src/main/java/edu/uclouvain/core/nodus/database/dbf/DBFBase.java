@@ -30,7 +30,7 @@ import java.nio.charset.StandardCharsets;
 public abstract class DBFBase {
 
   protected static final int END_OF_DATA = 0x1A;
-  protected static final Charset DEFAULT_CHARSET = StandardCharsets.ISO_8859_1;
+  protected static final Charset DEFAULT_CHARSET = StandardCharsets.UTF_8;
   protected static Charset defaultCharset = DEFAULT_CHARSET;
 
 

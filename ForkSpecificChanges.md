@@ -8,6 +8,7 @@ Groovy scripts developed by Nodus users.
 - Some code reformatting.
 
 # DBFBase
+- Set default Charset to StandardCharsets.UTF_8 (since version 1.12.1).
 - Make `setCharset(Charset charset)`static. Used to change the default Charset for DBFWriter and DBFReader.
 
 # DBFReader.java

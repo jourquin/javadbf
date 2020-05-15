@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.github.albfernandez</groupId>
 	<artifactId>javadbf4nodus</artifactId>
-	<version>1.12.0</version>
+	<version>1.12.1</version>
 	<url>https://github.com/albfernandez/javadbf</url>
 	<packaging>jar</packaging>
 	<name>javadbf</name>
@@ -21,6 +21,12 @@
 			<email>infjaf@gmail.com</email>
 			<organization>Alberto Fernández</organization>
 			<organizationUrl>https://github.com/albfernandez/</organizationUrl>
+		</developer>
+		<developer>
+			<name>Bart Jourquin</name>
+			<email>bart.jourquin@uclouvain.be</email>
+			<organization>UCLouvain</organization>
+			<organizationUrl>http://www.uclouvain.be/</organizationUrl>
 		</developer>
 	</developers>
 	<scm>
