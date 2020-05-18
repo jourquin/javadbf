@@ -173,7 +173,7 @@ public class DBFReader extends DBFBase implements Closeable {
    * @param in the InputStream or canonical file name where the data is read from.
    */
   public DBFReader(Object in) {
-    this(in, null, false);
+    this(in, defaultCharset, false);
   }
 
   /**
@@ -188,7 +188,7 @@ public class DBFReader extends DBFBase implements Closeable {
    */
   // TODO Change to boolean in 2.0
   public DBFReader(Object in, Boolean showDeletedRows) {
-    this(in, null, showDeletedRows);
+    this(in, defaultCharset, showDeletedRows);
   }
 
   /**
