@@ -18,6 +18,7 @@ an `InputStream`. If it is a `String`, it must be the canonical file name of a D
 a file name. 
 - Add the `public boolean hasNextRecord()` method.
 - Add the `public boolean isOpen()` method.
+- Use default Charset when none is given.
 
 
 # DBFWriter.java
