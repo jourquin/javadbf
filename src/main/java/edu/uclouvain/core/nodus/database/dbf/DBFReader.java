@@ -337,9 +337,12 @@ public class DBFReader extends DBFBase implements Closeable {
       throw new IllegalArgumentException("this DBFReader is closed");
     }
     List<Object> recordObjects = new ArrayList<>(this.getFieldCount());
+    
     try {
       boolean isDeleted = false;
-
+      
+      currentRecord += 1;
+      
       do {
         try {
           if (isDeleted && !showDeletedRows) {
@@ -405,7 +408,7 @@ public class DBFReader extends DBFBase implements Closeable {
     } catch (IOException e) {
       throw new DBFException(e.getMessage(), e);
     }
-    currentRecord += 1;
+   
     return recordObjects.toArray();
   }
   /**
