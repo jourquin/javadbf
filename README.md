@@ -1,6 +1,5 @@
 # JavaDBF
 
-Version 1.12.3: [release notes](CHANGELOG.md), [robustness audit and validation](AUDIT.md).
 JavaDBF is a Java library for reading and writing XBase files.
 There are plenty of legacy applications around with .dbf as their primary storage format.
 JavaDBF was initially written for data transfer with such applications.
