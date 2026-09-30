@@ -3,19 +3,18 @@ package edu.uclouvain.core.nodus.database.dbf.bug34_char_encoding;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
+import edu.uclouvain.core.nodus.database.dbf.DBFBase;
 import edu.uclouvain.core.nodus.database.dbf.DBFDataType;
 import edu.uclouvain.core.nodus.database.dbf.DBFException;
 import edu.uclouvain.core.nodus.database.dbf.DBFField;
 import edu.uclouvain.core.nodus.database.dbf.DBFReader;
 import edu.uclouvain.core.nodus.database.dbf.DBFUtils;
 import edu.uclouvain.core.nodus.database.dbf.DBFWriter;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -38,7 +37,7 @@ public class Bug34CharacterEncodingTest {
     DBFWriter wr = null;
     try {
       wr = new DBFWriter(baos, StandardCharsets.UTF_8);
-      // wr.setCharset(Charset.forName("windows-1253"));
+      // DBFBase.setCharset(Charset.forName("windows-1253"));
       DBFField fields[] = new DBFField[1];
 
       fields[0] = new DBFField();
@@ -59,7 +58,7 @@ public class Bug34CharacterEncodingTest {
 
       List<String> names = new ArrayList<String>();
       reader = new DBFReader(bais);
-      reader.setCharset(StandardCharsets.UTF_8);
+      DBFBase.setCharset(StandardCharsets.UTF_8);
       Object[] rowObject;
       while ((rowObject = reader.nextRecord()) != null) {
         names.add((String) rowObject[0]);

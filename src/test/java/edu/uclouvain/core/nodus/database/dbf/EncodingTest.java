@@ -22,7 +22,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import edu.uclouvain.core.nodus.database.dbf.mocks.NullOutputStream;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
@@ -31,7 +30,6 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -126,14 +124,14 @@ public class EncodingTest {
     DBFWriter writer = null;
     try {
       writer = new DBFWriter(new NullOutputStream());
-      writer.setCharset(StandardCharsets.ISO_8859_1);
-      Assert.assertEquals(StandardCharsets.ISO_8859_1, writer.getCharset());
+      DBFBase.setCharset(StandardCharsets.ISO_8859_1);
+      Assert.assertEquals(StandardCharsets.ISO_8859_1, DBFBase.getCharset());
       Assert.assertEquals(
-          StandardCharsets.ISO_8859_1.displayName(), writer.getCharset().displayName());
-      writer.setCharset(StandardCharsets.ISO_8859_1);
+          StandardCharsets.ISO_8859_1.displayName(), DBFBase.getCharset().displayName());
+      DBFBase.setCharset(StandardCharsets.ISO_8859_1);
       Assert.assertEquals(
-          StandardCharsets.ISO_8859_1.displayName(), writer.getCharset().displayName());
-      Assert.assertEquals(StandardCharsets.ISO_8859_1, writer.getCharset());
+          StandardCharsets.ISO_8859_1.displayName(), DBFBase.getCharset().displayName());
+      Assert.assertEquals(StandardCharsets.ISO_8859_1, DBFBase.getCharset());
     } finally {
       DBFUtils.close(writer);
     }
@@ -196,7 +194,7 @@ public class EncodingTest {
     DBFWriter wr = null;
     try {
       wr = new DBFWriter(baos);
-      wr.setCharset(StandardCharsets.UTF_8);
+      DBFBase.setCharset(StandardCharsets.UTF_8);
       DBFField fields[] = new DBFField[1];
 
       fields[0] = new DBFField();
@@ -214,7 +212,7 @@ public class EncodingTest {
 
       List<String> names = new ArrayList<String>();
       reader = new DBFReader(bais);
-      reader.setCharset(StandardCharsets.UTF_8);
+      DBFBase.setCharset(StandardCharsets.UTF_8);
       Object[] rowObject;
       while ((rowObject = reader.nextRecord()) != null) {
         names.add((String) rowObject[0]);

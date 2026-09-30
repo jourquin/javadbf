@@ -30,8 +30,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.nio.charset.Charset;
-import java.nio.charset.CharsetEncoder;
-import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.Arrays;
@@ -43,8 +41,6 @@ import java.util.Locale;
  * <p>This class is for internal usage for JavaDBF and you should not use it.
  */
 public final class DBFUtils {
-
-  private static final CharsetEncoder ASCII_ENCODER = Charset.forName("US-ASCII").newEncoder();
 
   private DBFUtils() {
     throw new AssertionError("No instances of this class are allowed");
@@ -62,25 +58,26 @@ public final class DBFUtils {
   public static Number readNumericStoredAsText(DataInputStream dataInput, int length)
       throws IOException {
     try {
-      byte t_float[] = new byte[length];
-      int readed = dataInput.read(t_float);
-      if (readed != length) {
-        throw new EOFException("failed to read:" + length + " bytes");
-      }
-      t_float = DBFUtils.removeSpaces(t_float);
-      t_float = DBFUtils.removeNullBytes(t_float);
-      if (t_float.length > 0
-          && DBFUtils.isPureAscii(t_float)
-          && !DBFUtils.contains(t_float, (byte) '?')
-          && !DBFUtils.contains(t_float, (byte) '*')) {
-        String aux = new String(t_float, StandardCharsets.US_ASCII).replace(',', '.');
-        if (".".equals(aux)) {
-          return BigDecimal.ZERO;
+      byte[] bytes = new byte[length];
+      dataInput.readFully(bytes);
+      char[] number = new char[length];
+      int count = 0;
+      for (byte value : bytes) {
+        if (value == ' ' || value == 0) {
+          continue;
         }
-        return new BigDecimal(aux);
-      } else {
+        if (value < 0x20 || value == '?' || value == '*') {
+          return null;
+        }
+        number[count++] = value == ',' ? '.' : (char) value;
+      }
+      if (count == 0) {
         return null;
       }
+      if (count == 1 && number[0] == '.') {
+        return BigDecimal.ZERO;
+      }
+      return new BigDecimal(number, 0, count);
     } catch (NumberFormatException e) {
       throw new DBFException("Failed to parse Float: " + e.getMessage(), e);
     }
@@ -155,16 +152,7 @@ public final class DBFUtils {
    */
   public static short littleEndian(short value) {
 
-    short num1 = value;
-    short mask = (short) 0xff;
-
-    short num2 = (short) (num1 & mask);
-    num2 <<= 8;
-    mask <<= 8;
-
-    num2 |= (num1 & mask) >> 8;
-
-    return num2;
+    return Short.reverseBytes(value);
   }
 
   /**
@@ -175,19 +163,7 @@ public final class DBFUtils {
    */
   public static int littleEndian(int value) {
 
-    int num1 = value;
-    int mask = 0xff;
-    int num2 = 0x00;
-
-    num2 |= num1 & mask;
-
-    for (int i = 1; i < 4; i++) {
-      num2 <<= 8;
-      mask <<= 8;
-      num2 |= (num1 & mask) >> (8 * i);
-    }
-
-    return num2;
+    return Integer.reverseBytes(value);
   }
 
   /**
@@ -220,8 +196,18 @@ public final class DBFUtils {
     byte[] stringBytes = text.getBytes(charset);
 
     if (stringBytes.length > length) {
-      return textPadding(
-          text.substring(0, text.length() - 1), charset, length, alignment, paddingByte);
+      // Find the longest fitting prefix without recursively copying successively shorter strings.
+      int low = 0;
+      int high = text.length();
+      while (low < high) {
+        int middle = low + (high - low + 1) / 2;
+        if (text.substring(0, middle).getBytes(charset).length <= length) {
+          low = middle;
+        } else {
+          high = middle - 1;
+        }
+      }
+      stringBytes = text.substring(0, low).getBytes(charset);
     }
 
     int t_offset = 0;
@@ -250,6 +236,12 @@ public final class DBFUtils {
    */
   public static byte[] doubleFormating(
       Number num, Charset charset, int fieldLength, int sizeDecimalPart) {
+    return doubleFormating(
+        num, charset, fieldLength, createDecimalFormat(fieldLength, sizeDecimalPart));
+  }
+
+  /** Creates a formatter that a writer can reuse for one numeric column. */
+  static DecimalFormat createDecimalFormat(int fieldLength, int sizeDecimalPart) {
     int sizeWholePart = fieldLength - (sizeDecimalPart > 0 ? sizeDecimalPart + 1 : 0);
 
     StringBuilder format = new StringBuilder(fieldLength);
@@ -268,8 +260,13 @@ public final class DBFUtils {
 
     DecimalFormat df = (DecimalFormat) NumberFormat.getInstance(Locale.ENGLISH);
     df.applyPattern(format.toString());
-    return textPadding(
-        df.format(num).toString(), charset, fieldLength, DBFAlignment.RIGHT, (byte) ' ');
+    return df;
+  }
+
+  /** Formats a number using a formatter owned by the calling writer, never shared globally. */
+  static byte[] doubleFormating(
+      Number num, Charset charset, int fieldLength, DecimalFormat format) {
+    return textPadding(format.format(num), charset, fieldLength, DBFAlignment.RIGHT, (byte) ' ');
   }
 
   /**
@@ -300,9 +297,12 @@ public final class DBFUtils {
     if (stringToCheck == null || stringToCheck.length() == 0) {
       return true;
     }
-    synchronized (ASCII_ENCODER) {
-      return ASCII_ENCODER.canEncode(stringToCheck);
+    for (int i = 0; i < stringToCheck.length(); i++) {
+      if (stringToCheck.charAt(i) > 0x7f) {
+        return false;
+      }
     }
+    return true;
   }
 
   /**
@@ -389,9 +389,17 @@ public final class DBFUtils {
    * @throws IOException if some IO error happens
    */
   public static void skip(InputStream inputStream, long bytesToSkip) throws IOException {
-    long skipped = (long) inputStream.skip(bytesToSkip);
-    for (long i = skipped; i < bytesToSkip; i++) {
-      inputStream.read();
+    long remaining = bytesToSkip;
+    while (remaining > 0) {
+      // Read the final byte too: seekable streams may report a skip beyond EOF as successful.
+      long skipped = inputStream.skip(remaining - 1);
+      if (skipped > 0) {
+        remaining -= skipped;
+      }
+      if (inputStream.read() == -1) {
+        throw new EOFException("Unexpected end of stream while skipping " + bytesToSkip + " bytes");
+      }
+      remaining--;
     }
   }
 }

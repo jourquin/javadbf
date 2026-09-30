@@ -20,6 +20,7 @@ package edu.uclouvain.core.nodus.database.dbf;
 
 import java.math.BigDecimal;
 import java.util.Date;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -43,7 +44,7 @@ public class DBFRow {
 
   private int getColumnIndex(String columnName) {
     Objects.requireNonNull(columnName);
-    String key = columnName.toLowerCase();
+    String key = columnName.toLowerCase(Locale.ROOT);
     Integer index = mapcolumnNames.get(key);
     if (index == null) {
       throw new DBFFieldNotFoundException("No field found for:" + columnName);
@@ -59,7 +60,9 @@ public class DBFRow {
    * @return true if the record is deleted
    */
   public boolean isDeleted() {
-    return "deleted".equals(this.fields[0].getName()) && getBoolean("deleted");
+    return this.fields.length > 0
+        && "deleted".equals(this.fields[0].getName())
+        && getBoolean("deleted");
   }
 
   /**

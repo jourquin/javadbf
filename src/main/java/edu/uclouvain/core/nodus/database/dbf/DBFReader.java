@@ -21,25 +21,25 @@ License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 package edu.uclouvain.core.nodus.database.dbf;
 
+import java.io.BufferedInputStream;
 import java.io.Closeable;
 import java.io.DataInputStream;
-import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
-import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
 
@@ -57,7 +57,8 @@ import java.util.TimeZone;
  * <p>The nextRecord() method returns an array of Objects and the types of these Object are as
  * follows:
  *
- * <table summary="Types mapping">
+ * <table>
+ * <caption>Types mapping</caption>
  * <thead>
  * <tr>
  * <th>xBase Type</th>
@@ -155,6 +156,7 @@ public class DBFReader extends DBFBase implements Closeable {
   private boolean showDeletedRows = false;
 
   private int currentRecord = 0;
+  private boolean endOfData;
 
   /*
    * Nodus API compatibility note : the constructors must also accept a canonical
@@ -244,7 +246,7 @@ public class DBFReader extends DBFBase implements Closeable {
     try {
 
       if (in instanceof String) {
-        is = new FileInputStream((String) in);
+        is = new BufferedInputStream(new FileInputStream((String) in), 64 * 1024);
       } else {
         is = (InputStream) in;
       }
@@ -264,9 +266,11 @@ public class DBFReader extends DBFBase implements Closeable {
 
       this.mapFieldNames = createMapFieldNames(this.header.userFieldArray);
     } catch (IOException e) {
-      DBFUtils.close(dataInputStream);
       DBFUtils.close(is);
       throw new DBFException(e.getMessage(), e);
+    } catch (RuntimeException e) {
+      DBFUtils.close(is);
+      throw e;
     }
   }
 
@@ -274,7 +278,7 @@ public class DBFReader extends DBFBase implements Closeable {
     Map<String, Integer> fieldNames = new HashMap<String, Integer>();
     for (int i = 0; i < fieldArray.length; i++) {
       String name = fieldArray[i].getName();
-      fieldNames.put(name.toLowerCase(), i);
+      fieldNames.put(name.toLowerCase(Locale.ROOT), i);
     }
     return Collections.unmodifiableMap(fieldNames);
   }
@@ -336,81 +340,74 @@ public class DBFReader extends DBFBase implements Closeable {
     if (this.closed) {
       throw new IllegalArgumentException("this DBFReader is closed");
     }
-    List<Object> recordObjects = new ArrayList<>(this.getFieldCount());
-    
+    if (endOfData) {
+      return null;
+    }
+    Object[] record = new Object[getFieldCount()];
     try {
-      boolean isDeleted = false;
-      
-      currentRecord += 1;
-      
+      boolean deleted;
       do {
-        try {
-          if (isDeleted && !showDeletedRows) {
-            skip(this.header.recordLength - 1);
-          }
-          int t_byte = this.dataInputStream.readByte();
-          if (t_byte == END_OF_DATA || t_byte == -1) {
-            return null;
-          }
-          isDeleted = t_byte == '*';
-        } catch (EOFException e) {
+        int marker = dataInputStream.read();
+        if (marker == END_OF_DATA || marker == -1) {
+          endOfData = true;
           return null;
         }
-      } while (isDeleted && !showDeletedRows);
+        currentRecord++;
+        deleted = marker == '*';
+        if (deleted && !showDeletedRows) {
+          skip(header.recordLength - 1);
+        }
+      } while (deleted && !showDeletedRows);
 
+      int column = 0;
       if (showDeletedRows) {
-        recordObjects.add(isDeleted);
+        record[column++] = deleted;
       }
-
-      for (int i = 0; i < this.header.fieldArray.length; i++) {
-        DBFField field = this.header.fieldArray[i];
-        Object o = getFieldValue(field);
-        if (field.isSystem() || field.getDBFType() == DBFDataType.NULL_FLAGS) {
-          if (field.getDBFType() == DBFDataType.NULL_FLAGS && o instanceof BitSet) {
-            BitSet nullFlags = (BitSet) o;
-            int currentIndex = -1;
-            for (int j = 0; j < this.header.fieldArray.length; j++) {
-              DBFField field1 = this.header.fieldArray[j];
-              if (field1.isNullable()) {
-                currentIndex++;
-                if (nullFlags.get(currentIndex)) {
-                  recordObjects.set(j, null);
-                }
-              }
-              if (field1.getDBFType() == DBFDataType.VARBINARY
-                  || field1.getDBFType() == DBFDataType.VARCHAR) {
-                currentIndex++;
-                if (recordObjects.get(j) instanceof byte[]) {
-                  byte[] data = (byte[]) recordObjects.get(j);
-                  int size = field1.getLength();
-                  if (!nullFlags.get(currentIndex)) {
-                    // Data is not full
-                    // lenght is stored in the last position
-                    size = data[data.length - 1];
-                  }
-                  byte[] newData = new byte[size];
-                  System.arraycopy(data, 0, newData, 0, size);
-                  Object o1 = newData;
-                  if (field1.getDBFType() == DBFDataType.VARCHAR) {
-                    o1 = new String(newData, getCharset());
-                  }
-                  recordObjects.set(j, o1);
-                }
-              }
-            }
-          }
-        } else {
-          recordObjects.add(o);
+      BitSet nullFlags = null;
+      for (DBFField field : header.fieldArray) {
+        Object value = getFieldValue(field);
+        if (field.getDBFType() == DBFDataType.NULL_FLAGS && value instanceof BitSet) {
+          nullFlags = (BitSet) value;
+        } else if (!field.isSystem()) {
+          record[column++] = value;
         }
       }
-    } catch (EOFException e) {
-      throw new DBFException(e.getMessage(), e);
+      if (nullFlags != null) {
+        column = showDeletedRows ? 1 : 0;
+        int bit = 0;
+        for (DBFField field : header.fieldArray) {
+          if (field.isSystem() || field.getDBFType() == DBFDataType.NULL_FLAGS) {
+            continue;
+          }
+          if (field.isNullable() && nullFlags.get(bit++)) {
+            record[column] = null;
+          }
+          if (field.getDBFType() == DBFDataType.VARBINARY
+              || field.getDBFType() == DBFDataType.VARCHAR) {
+            boolean full = nullFlags.get(bit++);
+            if (record[column] instanceof byte[]) {
+              byte[] data = (byte[]) record[column];
+              int length = full ? data.length : data[data.length - 1] & 0xff;
+              if (length > data.length) {
+                throw new DBFException("Invalid variable field length: " + length);
+              }
+              byte[] value = java.util.Arrays.copyOf(data, length);
+              record[column] =
+                  field.getDBFType() == DBFDataType.VARCHAR
+                      ? new String(value, getCharset())
+                      : value;
+            }
+          }
+          column++;
+        }
+      }
+      return record;
     } catch (IOException e) {
+      endOfData = true;
       throw new DBFException(e.getMessage(), e);
     }
-   
-    return recordObjects.toArray();
   }
+
   /**
    * Reads the returns the next row in the DBF stream.
    *
@@ -421,18 +418,14 @@ public class DBFReader extends DBFBase implements Closeable {
     if (record == null) {
       return null;
     }
-    return new DBFRow(record, mapFieldNames, this.header.fieldArray);
+    return new DBFRow(record, mapFieldNames, this.header.userFieldArray);
   }
 
   protected Object getFieldValue(DBFField field) throws IOException {
-    int bytesReaded = 0;
     switch (field.getDBFType()) {
       case CHARACTER:
         byte b_array[] = new byte[field.getLength()];
-        bytesReaded = this.dataInputStream.read(b_array);
-        if (bytesReaded < field.getLength()) {
-          throw new EOFException("Unexpected end of file");
-        }
+        this.dataInputStream.readFully(b_array);
         if (this.trimRightSpaces) {
           return new String(DBFUtils.trimRightSpaces(b_array), getCharset());
         } else {
@@ -442,29 +435,17 @@ public class DBFReader extends DBFBase implements Closeable {
       case VARCHAR:
       case VARBINARY:
         byte b_array_var[] = new byte[field.getLength()];
-        bytesReaded = this.dataInputStream.read(b_array_var);
-        if (bytesReaded < field.getLength()) {
-          throw new EOFException("Unexpected end of file");
-        }
+        this.dataInputStream.readFully(b_array_var);
         return b_array_var;
       case DATE:
         byte t_byte_year[] = new byte[4];
-        bytesReaded = this.dataInputStream.read(t_byte_year);
-        if (bytesReaded < 4) {
-          throw new EOFException("Unexpected end of file");
-        }
+        this.dataInputStream.readFully(t_byte_year);
 
         byte t_byte_month[] = new byte[2];
-        bytesReaded = this.dataInputStream.read(t_byte_month);
-        if (bytesReaded < 2) {
-          throw new EOFException("Unexpected end of file");
-        }
+        this.dataInputStream.readFully(t_byte_month);
 
         byte t_byte_day[] = new byte[2];
-        bytesReaded = this.dataInputStream.read(t_byte_day);
-        if (bytesReaded < 2) {
-          throw new EOFException("Unexpected end of file");
-        }
+        this.dataInputStream.readFully(t_byte_day);
 
         try {
           GregorianCalendar calendar =
@@ -490,13 +471,10 @@ public class DBFReader extends DBFBase implements Closeable {
         int data = DBFUtils.readLittleEndianInt(this.dataInputStream);
         return data;
       case CURRENCY:
-        int c_data = DBFUtils.readLittleEndianInt(this.dataInputStream);
-        String s_data = String.format("%05d", c_data);
-        String x1 = s_data.substring(0, s_data.length() - 4);
-        String x2 = s_data.substring(s_data.length() - 4);
-
-        skip(field.getLength() - 4);
-        return new BigDecimal(x1 + "." + x2);
+        byte[] currency = new byte[8];
+        dataInputStream.readFully(currency);
+        return BigDecimal.valueOf(
+            ByteBuffer.wrap(currency).order(ByteOrder.LITTLE_ENDIAN).getLong(), 4);
       case TIMESTAMP:
       case TIMESTAMP_DBASE7:
         int days = DBFUtils.readLittleEndianInt(this.dataInputStream);
@@ -526,10 +504,7 @@ public class DBFReader extends DBFBase implements Closeable {
         return readDoubleField(field);
       case NULL_FLAGS:
         byte[] data1 = new byte[field.getLength()];
-        int readed = dataInputStream.read(data1);
-        if (readed != field.getLength()) {
-          throw new EOFException("Unexpected end of file");
-        }
+        dataInputStream.readFully(data1);
         return BitSet.valueOf(data1);
       default:
         skip(field.getLength());
@@ -539,16 +514,11 @@ public class DBFReader extends DBFBase implements Closeable {
 
   private Object readDoubleField(DBFField field) throws IOException {
     byte[] data = new byte[field.getLength()];
-    int bytesReaded = this.dataInputStream.read(data);
-    if (bytesReaded < field.getLength()) {
-      throw new EOFException("Unexpected end of file");
+    this.dataInputStream.readFully(data);
+    if (data.length < 8) {
+      throw new DBFException("Invalid double field length: " + data.length);
     }
-    return ByteBuffer.wrap(
-            new byte[] {
-              data[7], data[6], data[5], data[4],
-              data[3], data[2], data[1], data[0]
-            })
-        .getDouble();
+    return ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).getDouble();
   }
 
   private Object readMemoField(DBFField field) throws IOException {
@@ -581,11 +551,17 @@ public class DBFReader extends DBFBase implements Closeable {
    * @throws IOException if some IO error happens
    */
   public void skipRecords(int recordsToSkip) throws IOException {
+    if (recordsToSkip < 0) {
+      throw new IllegalArgumentException("Cannot skip a negative number of records");
+    }
     if (showDeletedRows) {
-      skip(recordsToSkip * this.header.recordLength);
+      DBFUtils.skip(dataInputStream, (long) recordsToSkip * header.recordLength);
+      currentRecord = (int) Math.min(Integer.MAX_VALUE, (long) currentRecord + recordsToSkip);
     } else {
       for (int i = 0; i < recordsToSkip; i++) {
-        nextRecord();
+        if (nextRecord() == null) {
+          break;
+        }
       }
     }
   }
@@ -642,14 +618,22 @@ public class DBFReader extends DBFBase implements Closeable {
     if (!file.canRead()) {
       throw new DBFException("Cannot read Memo file " + file.getName());
     }
-    this.memoFile = new DBFMemoFile(file, this.getCharset());
+    if (closed) {
+      throw new IllegalStateException("Cannot attach a memo file to a closed reader");
+    }
+    this.memoFile = new DBFMemoFile(file, getCharset(), inMemory);
   }
 
   @Override
   public void close() {
-    this.closed = true;
-    DBFUtils.close(this.dataInputStream);
-    DBFUtils.close(this.memoFile);
+    if (!closed) {
+      this.closed = true;
+      DBFUtils.close(this.dataInputStream);
+      DBFUtils.close(this.memoFile);
+      this.memoFile = null;
+      this.dataInputStream = null;
+      this.inputStream = null;
+    }
   }
 
   @Override
@@ -669,12 +653,11 @@ public class DBFReader extends DBFBase implements Closeable {
   }
 
   protected int getEstimatedOutputSize() {
-    return this.getHeader().numberOfRecords * this.getHeader().recordLength;
+    return (int) Math.min(Integer.MAX_VALUE, (long) header.numberOfRecords * header.recordLength);
   }
 
   /**
-   * ********************************************** 
-   * New methods added for Nodus API compatibility
+   * ********************************************** New methods added for Nodus API compatibility
    * **********************************************
    */
 
@@ -684,8 +667,7 @@ public class DBFReader extends DBFBase implements Closeable {
    * @return true unless end of file.
    */
   public boolean hasNextRecord() {
-    if (currentRecord < this.header.numberOfRecords) return true;
-    return false;
+    return !closed && !endOfData && currentRecord < this.header.numberOfRecords;
   }
 
   /**

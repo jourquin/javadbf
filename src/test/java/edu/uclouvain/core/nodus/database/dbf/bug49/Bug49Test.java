@@ -3,24 +3,16 @@ package edu.uclouvain.core.nodus.database.dbf.bug49;
 import edu.uclouvain.core.nodus.database.dbf.DBFReader;
 import edu.uclouvain.core.nodus.database.dbf.DBFRow;
 import edu.uclouvain.core.nodus.database.dbf.DBFUtils;
-
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
-
 import org.junit.Test;
 
 public class Bug49Test {
 
   public Bug49Test() {
     super();
-  }
-
-  private void print(DBFRow row, int fieldCount) {
-    for (int i = 0; i < fieldCount; i++) {
-      System.out.println(row.getObject(i));
-    }
   }
 
   @Test

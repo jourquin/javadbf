@@ -20,7 +20,6 @@ package edu.uclouvain.core.nodus.database.dbf;
 
 import java.io.File;
 import java.io.FileInputStream;
-
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -30,7 +29,8 @@ public class FixtureCp1251Test {
     File file = new File("src/test/resources/fixtures/cp1251.dbf");
     DBFReader reader = null;
     try {
-      reader = new DBFReader(new FileInputStream(file));
+      reader =
+          new DBFReader(new FileInputStream(file), java.nio.charset.StandardCharsets.ISO_8859_1);
 
       DBFHeader header = reader.getHeader();
 

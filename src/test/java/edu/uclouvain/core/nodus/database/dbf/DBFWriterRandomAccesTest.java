@@ -22,7 +22,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -66,7 +65,7 @@ public class DBFWriterRandomAccesTest {
       DBFUtils.close(fos);
     }
 
-    DBFWriter writerRandomAcces = new DBFWriter(outputFile);
+    DBFWriter writerRandomAcces = new DBFWriter(outputFile, false);
     for (int i = 0; i < 3; i++) {
       Object rowData[] = new Object[fields.length];
       rowData[0] = Integer.toString(i);

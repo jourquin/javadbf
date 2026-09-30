@@ -28,8 +28,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
+import java.util.Locale;
 
 /** Class for read memo files (DBT and FPT) */
 public class DBFMemoFile implements Closeable {
@@ -40,12 +42,20 @@ public class DBFMemoFile implements Closeable {
   private int blockSize = 512;
   private boolean fpt = false;
   private RandomAccessFile file;
+  private long fileLength;
+  private boolean closed;
 
   protected DBFMemoFile(File memoFile, Charset charset, boolean inMemory) {
     this.charset = charset;
-    this.fpt = memoFile.getName().toLowerCase().endsWith(".fpt");
-    initReader(memoFile, inMemory);
-    this.blockSize = readBlockSize();
+    this.fpt = memoFile.getName().toLowerCase(Locale.ROOT).endsWith(".fpt");
+    try {
+      initReader(memoFile, inMemory);
+      this.fileLength = inMemory ? baisMemory.available() : memoFile.length();
+      this.blockSize = readBlockSize();
+    } catch (RuntimeException e) {
+      close();
+      throw e;
+    }
   }
 
   private void initReader(File memoFile, boolean inMemory) {
@@ -66,6 +76,12 @@ public class DBFMemoFile implements Closeable {
   }
 
   private void seek(long pos) throws IOException {
+    if (closed) {
+      throw new IOException("Memo file is closed");
+    }
+    if (pos < 0 || pos > fileLength) {
+      throw new IOException("Invalid memo offset: " + pos);
+    }
     if (fileInMemory != null) {
       fileInMemory.reset();
       DBFUtils.skip(fileInMemory, pos);
@@ -75,6 +91,9 @@ public class DBFMemoFile implements Closeable {
   }
 
   public int read(byte b[]) throws IOException {
+    if (closed) {
+      throw new IOException("Memo file is closed");
+    }
     if (baisMemory != null) {
       return baisMemory.read(b);
     }
@@ -102,10 +121,10 @@ public class DBFMemoFile implements Closeable {
       int size = 0;
       if (isFPT()) {
         seek(6);
-        size = readShort();
+        size = readShort() & 0xffff;
       } else {
         seek(20);
-        size = readLittleEndianShort();
+        size = readLittleEndianShort() & 0xffff;
       }
       if (size == 0) {
         size = 512;
@@ -140,69 +159,73 @@ public class DBFMemoFile implements Closeable {
   }
 
   protected Object readData(int block, DBFDataType type) {
-    long blockStart = this.blockSize * (long) block;
+    if (closed) {
+      throw new IllegalStateException("Memo file is closed");
+    }
+    if (block == 0) {
+      return null;
+    }
+    long blockStart = (long) blockSize * block;
     DBFDataType usedType = type;
     try {
       seek(blockStart);
-      byte[] blockData = new byte[this.blockSize];
-      ByteArrayOutputStream baos = new ByteArrayOutputStream(this.blockSize);
-      boolean end = false;
-
-      int itemSize = Integer.MAX_VALUE;
-      boolean firstBlock = true;
-      boolean checkForEndMark = true;
-      while (!end) {
-        int endIndex = read(blockData);
-        if (endIndex <= 0) {
-          break;
+      int prefixLength = (int) Math.min(8, fileLength - blockStart);
+      byte[] prefix = new byte[prefixLength];
+      getDataInput().readFully(prefix);
+      byte[] data;
+      if (isFPT() || (prefixLength >= 4 && isMagicDBase4(prefix))) {
+        if (prefixLength < 8) {
+          throw new IOException("Truncated memo header");
         }
-        int initialIndex = 0;
-        if (firstBlock && (isFPT() || isMagicDBase4(blockData))) {
-          initialIndex = 8;
-          checkForEndMark = false;
-          if (isFPT()) {
-            int intType = blockData[3];
-            // 01 is text, other are binary
-            if (intType == 1) {
-              usedType = DBFDataType.MEMO;
-            } else if (intType == 2) {
-              usedType = DBFDataType.BINARY;
-            } else if (intType == 0) {
-              usedType = DBFDataType.PICTURE;
+        ByteBuffer header = ByteBuffer.wrap(prefix);
+        int itemSize;
+        if (isFPT()) {
+          int itemType = header.getInt();
+          if (itemType == 1) {
+            usedType = DBFDataType.MEMO;
+          } else if (itemType == 2) {
+            usedType = DBFDataType.BINARY;
+          } else if (itemType == 0) {
+            usedType = DBFDataType.PICTURE;
+          }
+          itemSize = header.getInt();
+        } else {
+          itemSize = header.order(ByteOrder.LITTLE_ENDIAN).getInt(4) - 8;
+        }
+        if (itemSize < 0 || itemSize > fileLength - blockStart - 8) {
+          throw new IOException("Invalid memo length: " + itemSize);
+        }
+        data = new byte[itemSize];
+        getDataInput().readFully(data);
+      } else {
+        seek(blockStart);
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream(blockSize);
+        byte[] buffer = new byte[blockSize];
+        boolean pendingEndByte = false;
+        boolean end = false;
+        int count;
+        while (!end && (count = read(buffer)) > 0) {
+          for (int i = 0; i < count; i++) {
+            int value = buffer[i] & 0xff;
+            if (pendingEndByte) {
+              if (value == 0x1a) {
+                end = true;
+                break;
+              }
+              bytes.write(0x1a);
             }
-
-            itemSize =
-                ByteBuffer.wrap(new byte[] {blockData[4], blockData[5], blockData[6], blockData[7]})
-                    .getInt();
-          } else {
-            itemSize =
-                ByteBuffer.wrap(new byte[] {blockData[7], blockData[6], blockData[5], blockData[4]})
-                        .getInt()
-                    - 8;
-          }
-          endIndex = Math.min(itemSize + 8, endIndex);
-        }
-        firstBlock = false;
-        for (int i = initialIndex; i < endIndex && baos.size() < itemSize; i++) {
-          baos.write(blockData[i]);
-          if (checkForEndMark
-              && i < endIndex - 2
-              && blockData[i + 1] == 0x1A
-              && blockData[i + 2] == 0x1A) {
-            end = true;
-            break;
-          }
-          if (!checkForEndMark) {
-            end = baos.size() >= itemSize;
+            pendingEndByte = value == 0x1a;
+            if (!pendingEndByte) {
+              bytes.write(value);
+            }
           }
         }
+        if (pendingEndByte && !end) {
+          bytes.write(0x1a);
+        }
+        data = bytes.toByteArray();
       }
-      byte[] data = baos.toByteArray();
-      if (usedType != DBFDataType.MEMO) {
-        return data;
-      }
-      return new String(data, charset);
-
+      return usedType == DBFDataType.MEMO ? new String(data, charset) : data;
     } catch (IOException ex) {
       throw new DBFException(ex.getMessage(), ex);
     }
@@ -216,8 +239,13 @@ public class DBFMemoFile implements Closeable {
   }
 
   public void close() {
-    DBFUtils.close(this.file);
-    DBFUtils.close(this.fileInMemory);
-    DBFUtils.close(this.baisMemory);
+    if (!closed) {
+      closed = true;
+      DBFUtils.close(this.file);
+      DBFUtils.close(this.fileInMemory);
+      this.file = null;
+      this.fileInMemory = null;
+      this.baisMemory = null;
+    }
   }
 }

@@ -1,7 +1,40 @@
 # JavaDBF
+
+Version 1.12.3: [release notes](CHANGELOG.md), [robustness audit and validation](AUDIT.md).
 JavaDBF is a Java library for reading and writing XBase files.
 There are plenty of legacy applications around with .dbf as their primary storage format.
 JavaDBF was initially written for data transfer with such applications.
+
+## Build requirements
+
+Java 11 or later is required to build and run this fork. Maven compiles with
+`--release 11`, which checks Java 11 language/API compatibility and produces Java 11
+class files. To build and run the tests on macOS with JDK 11:
+
+```sh
+JAVA_HOME=$(/usr/libexec/java_home -v 11) mvn clean test spotbugs:check jar:jar
+```
+
+To build the distribution, including sources and Javadoc:
+
+```sh
+JAVA_HOME=$(/usr/libexec/java_home -v 11) mvn clean package
+```
+
+The three artifacts are `target/javadbf4nodus-1.12.3.jar`,
+`target/javadbf4nodus-1.12.3-sources.jar` and
+`target/javadbf4nodus-1.12.3-javadoc.jar`. Maven 3.6.3 or later is required by the
+Javadoc plugin. Tests run during packaging; no signing key is needed for `package`.
+
+In Eclipse, register a native JDK 11 under **Settings/Preferences → Java → Installed
+JREs**, then map **Execution Environments → JavaSE-11** to that JDK. Refresh the
+project and use **Maven → Update Project**, then **Project → Clean**. The Maven
+configuration is the shared source of the Java release setting; local Eclipse
+metadata is ignored by Git.
+
+Existing JUnit and Maven launches can retain an old JRE: under **Run → Run
+Configurations**, select the launch and set its **JRE** tab to JavaSE-11 or the
+registered native JDK 11. JUnit tests use the project root as their working directory.
 
 # License
 

@@ -22,7 +22,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -55,7 +54,7 @@ public class AnyNumericTypeTest {
     ByteArrayOutputStream out = null;
     try {
       out = new ByteArrayOutputStream();
-      writer = new DBFWriter(out);
+      writer = new DBFWriter(out, java.nio.charset.StandardCharsets.UTF_8);
       writer.setFields(fields);
 
       // now populate DBFWriter
@@ -71,7 +70,7 @@ public class AnyNumericTypeTest {
       rowData = new Object[3];
       rowData[0] = "1001";
       rowData[1] = "Lalit";
-      rowData[2] = new Float(3400);
+      rowData[2] = Float.valueOf(3400);
 
       writer.addRecord(rowData);
 
@@ -118,7 +117,7 @@ public class AnyNumericTypeTest {
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     try {
-      writer = new DBFWriter(out);
+      writer = new DBFWriter(out, java.nio.charset.StandardCharsets.UTF_8);
       writer.setFields(fields);
 
       // now populate DBFWriter
@@ -127,14 +126,14 @@ public class AnyNumericTypeTest {
       Object rowData[] = new Object[3];
       rowData[0] = "1000";
       rowData[1] = "John";
-      rowData[2] = new Integer(5000);
+      rowData[2] = Integer.valueOf(5000);
 
       writer.addRecord(rowData);
 
       rowData = new Object[3];
       rowData[0] = "1001";
       rowData[1] = "Lalit";
-      rowData[2] = new Long(3400);
+      rowData[2] = Long.valueOf(3400);
 
       writer.addRecord(rowData);
 

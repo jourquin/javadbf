@@ -22,72 +22,102 @@ package edu.uclouvain.core.nodus.database.dbf;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.LinkedList;
-import java.util.Queue;
 
+/** A DBC decompression stream backed by one byte array, without a boxed-byte queue. */
 class DBFExploderInputStream extends InputStream {
-
   private InputStream in;
-  private Queue<Byte> queue = new LinkedList<Byte>();
-  private int estimatedUncompressedSize = 0;
+  private final int estimatedUncompressedSize;
+  private byte[] data;
+  private int position;
+  private boolean closed;
 
   DBFExploderInputStream(InputStream in) {
     this(in, 0);
   }
 
   DBFExploderInputStream(InputStream in, int uncompressedSize) {
-    super();
     this.in = in;
     this.estimatedUncompressedSize = uncompressedSize;
   }
 
-  @Override
-  public int read() throws IOException {
-    if (this.queue.isEmpty()) {
-      int readed = fillQueue();
-      if (readed < 0) {
-        return -1;
-      }
+  private void load() throws IOException {
+    if (closed) {
+      throw new IOException("Decompression stream is closed");
     }
-    return queue.poll();
+    if (data == null) {
+      byte[] compressed = getCompressedByteStream().toByteArray();
+      ByteArrayOutputStream output = new ByteArrayOutputStream(4096);
+      if (compressed.length > 0) {
+        DBFExploder.pkexplode(
+            compressed,
+            DBFExploder.createOutputStreamStorage(output),
+            getAdjustedOutputSize(compressed));
+      }
+      data = output.toByteArray();
+    }
   }
 
-  private int fillQueue() throws IOException {
-    ByteArrayOutputStream baos = getCompressedByteStream();
-    if (baos.size() <= 0) {
+  @Override
+  public int read() throws IOException {
+    load();
+    return position < data.length ? data[position++] & 0xff : -1;
+  }
+
+  @Override
+  public int read(byte[] bytes, int offset, int length) throws IOException {
+    if (bytes == null) {
+      throw new NullPointerException("bytes");
+    }
+    if (offset < 0 || length < 0 || offset > bytes.length - length) {
+      throw new IndexOutOfBoundsException();
+    }
+    if (length == 0) {
+      return 0;
+    }
+    load();
+    if (position == data.length) {
       return -1;
     }
-    byte[] compressedData = baos.toByteArray();
+    int count = Math.min(length, data.length - position);
+    System.arraycopy(data, position, bytes, offset, count);
+    position += count;
+    return count;
+  }
 
-    int outputBufferSize = getAdjustedOutputSize(compressedData);
-
-    byte[] decompressedData = new byte[outputBufferSize];
-    int decompressed =
-        DBFExploder.pkexplode(
-            compressedData, DBFExploder.createInMemoryStorage(decompressedData), outputBufferSize);
-
-    for (int i = 0; i < decompressed; i++) {
-      queue.add(decompressedData[i]);
+  @Override
+  public void close() throws IOException {
+    if (!closed) {
+      closed = true;
+      data = null;
+      try {
+        in.close();
+      } finally {
+        in = null;
+      }
     }
-
-    return decompressed;
   }
 
   protected int getAdjustedOutputSize(byte[] compressedData) {
-    int outputBufferSize = estimatedUncompressedSize;
-    if (outputBufferSize < compressedData.length) {
-      outputBufferSize = compressedData.length * 6;
-    }
-    return outputBufferSize;
+    // A guessed compression ratio can truncate valid, highly compressed files.
+    // Storage grows with actual output; this limit does not preallocate memory.
+    return estimatedUncompressedSize > 0 ? estimatedUncompressedSize : Integer.MAX_VALUE;
   }
 
   protected ByteArrayOutputStream getCompressedByteStream() throws IOException {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream(4096);
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream(4096);
     byte[] buffer = new byte[4096];
-    int readed = 0;
-    while ((readed = this.in.read(buffer)) > 0) {
-      baos.write(buffer, 0, readed);
+    int count;
+    while ((count = in.read(buffer)) != -1) {
+      if (count == 0) {
+        int value = in.read();
+        if (value == -1) {
+          break;
+        }
+        bytes.write(value);
+      } else {
+        bytes.write(buffer, 0, count);
+      }
     }
-    return baos;
+    return bytes;
   }
 }

@@ -183,7 +183,7 @@ public class DBFField {
     byte[] fieldName = new byte[11];
     in.readFully(fieldName, 1, 10); /* 1-10 */
     fieldName[0] = t_byte;
-    int nameNullIndex = fieldName.length - 1;
+    int nameNullIndex = fieldName.length;
     for (int i = 0; i < fieldName.length; i++) {
       if (fieldName[i] == (byte) 0) {
         nameNullIndex = i;
@@ -227,7 +227,7 @@ public class DBFField {
     byte[] fieldName = new byte[32];
     in.readFully(fieldName, 1, 31); /* 1-10 */
     fieldName[0] = t_byte;
-    int nameNullIndex = fieldName.length - 1;
+    int nameNullIndex = fieldName.length;
     for (int i = 0; i < fieldName.length; i++) {
       if (fieldName[i] == (byte) 0) {
         nameNullIndex = i;
@@ -261,7 +261,7 @@ public class DBFField {
     // since for char fields decimal count should be zero for other versions that do not support
     // this extended functionality.
     if (field.type == DBFDataType.CHARACTER || field.type == DBFDataType.VARCHAR) {
-      field.length |= field.decimalCount << 8;
+      field.length |= (field.decimalCount & 0xff) << 8;
       field.decimalCount = 0;
     }
   }
@@ -565,8 +565,7 @@ public class DBFField {
   }
 
   /**
-   * ********************************************** 
-   * New methods added for Nodus API compatibility
+   * ********************************************** New methods added for Nodus API compatibility
    * **********************************************
    */
 

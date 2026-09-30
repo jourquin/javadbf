@@ -27,7 +27,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.Calendar;
 
 /** Created by ialek36 on 11/8/17. */
@@ -52,36 +51,19 @@ public class DBFtoDBC {
   }
 
   static void convert(File source, File target) {
-    DBFReader reader = null;
-    OutputStream out = null;
-    DBFExploderInputStream myInputStream = null;
-    try {
-
-      // create a DBFReader object
-      InputStream inStream = new BufferedInputStream(new FileInputStream(source));
-      reader = new DBCDATASUSReader(inStream);
-
-      // Create writer
-      out = new BufferedOutputStream(new FileOutputStream(target));
-
-      myInputStream = new DBFExploderInputStream(inStream);
-
-      byte[] compressedData = myInputStream.getCompressedByteStream().toByteArray();
-      int outputBufferSize = myInputStream.getAdjustedOutputSize(compressedData);
-
-      DataOutputStream outStream = new DataOutputStream(out);
-      reader.getHeader().write(outStream);
-
-      DBFExploder.pkexplode(
-          compressedData, DBFExploder.createOutputStreamStorage(out), outputBufferSize);
-
-      outStream.flush();
+    try (InputStream inStream = new BufferedInputStream(new FileInputStream(source));
+        DBCDATASUSReader reader = new DBCDATASUSReader(inStream);
+        DataOutputStream output =
+            new DataOutputStream(new BufferedOutputStream(new FileOutputStream(target)))) {
+      reader.getHeader().write(output);
+      // initDBC has consumed the header and CRC, but decompression is still lazy.
+      try (DBFExploderInputStream compressed = new DBFExploderInputStream(inStream)) {
+        byte[] input = compressed.getCompressedByteStream().toByteArray();
+        DBFExploder.pkexplode(
+            input, DBFExploder.createOutputStreamStorage(output), Integer.MAX_VALUE);
+      }
     } catch (Exception e) {
       e.printStackTrace();
-    } finally {
-      DBFUtils.close(reader);
-      DBFUtils.close(out);
-      DBFUtils.close(myInputStream);
     }
   }
 }

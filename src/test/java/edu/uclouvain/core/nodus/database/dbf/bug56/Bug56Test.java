@@ -1,16 +1,15 @@
 package edu.uclouvain.core.nodus.database.dbf.bug56;
 
+import edu.uclouvain.core.nodus.database.dbf.DBFBase;
 import edu.uclouvain.core.nodus.database.dbf.DBFField;
 import edu.uclouvain.core.nodus.database.dbf.DBFReader;
 import edu.uclouvain.core.nodus.database.dbf.DBFRow;
 import edu.uclouvain.core.nodus.database.dbf.DBFUtils;
-
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.charset.Charset;
-
 import org.junit.Test;
 
 public class Bug56Test {
@@ -21,6 +20,7 @@ public class Bug56Test {
 
   @Test
   public void test() throws Exception {
+    Charset originalCharset = DBFBase.getCharset();
     DBFReader dbfReader = null;
     InputStream in = null;
     File input = new File("src/test/resources/bug-56-index-out-of-bounds/56-testdata.dbf");
@@ -54,6 +54,7 @@ public class Bug56Test {
     } finally {
       DBFUtils.close(dbfReader);
       DBFUtils.close(in);
+      DBFBase.setCharset(originalCharset);
     }
   }
 }

@@ -1,5 +1,7 @@
 # Fork specific changes
 
+For version 1.12.3, see [CHANGELOG.md](CHANGELOG.md) and the full [audit report](AUDIT.md).
+
 ## Global changes
 - Compiled library name changed to `javadbf4nodus-xxx.jar`, in order to identify the jar as a fork.
 - Package name changed from `com.linuxense.javadbf` to `edu.uclouvain.core.nodus.database.dbf`. This change was introduced to allow a 
@@ -28,6 +30,15 @@ a file name.
 - Add a `public DBFWriter(File dbfFile, boolean overwrite, Charset charset)` constructor.
 - Add a `public DBFWriter(String fileName, DBFField[] fields, Charset charset)` constructor.
 - Don't throw an exception in `dbfFileDBFWriter(File dbfFile ...)` if the Charset is set to UTF-8. 
+
+- Buffer file-backed record writes in 64 KiB, flushing before header updates at close.
+  Records are serialized immediately; writer memory does not grow with the row count.
+- Reuse numeric formatters per writer/column and a calendar per writer for date values.
+- Preserve append order and a single EOF marker, including reopening without adding rows.
+- `DBFLockWriter` flushes records while holding the file lock and releases the lock when
+  record validation fails. Subclasses that reposition the underlying file can call
+  `flushRecords()` first.
+- OutputStream constructors retain their existing in-memory record behavior.
 
 # DBFField.java
 

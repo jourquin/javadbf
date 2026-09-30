@@ -24,7 +24,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-
 import org.junit.Test;
 
 public class CreateEmptyFileFromTemplateTest {
@@ -42,7 +41,7 @@ public class CreateEmptyFileFromTemplateTest {
         fields[i] = reader.getField(i);
       }
 
-      writer = new DBFWriter(os, reader.getCharset());
+      writer = new DBFWriter(os, DBFBase.getCharset());
       writer.setFields(fields);
 
     } finally {

@@ -213,6 +213,9 @@ public class DBFExploder {
     if (pInBuffer.length < 4)
       throw new IllegalArgumentException("PK_ERR_INCOMPLETE_INPUT: Incomplete input");
 
+    if (outSize < 0) {
+      throw new IllegalArgumentException("Negative output size");
+    }
     int pOutPos = 0;
     int pInPos = 0;
 
@@ -353,6 +356,9 @@ public class DBFExploder {
                 "PK_ERR_BUFFER_TOO_SMALL: Output buffer is full: " + pOutPos + " / " + outSize);
 
           // Check whether the offset is a valid one into the dictionary
+          if (nCurDictSize == 0) {
+            throw new IllegalArgumentException("PK_ERR_BAD_DATA: Empty dictionary reference");
+          }
           while (pCopyOffs < 0) pCopyOffs += nCurDictSize;
           while (pCopyOffs >= nCurDictSize) pCopyOffs -= nCurDictSize;
 
@@ -441,7 +447,10 @@ public class DBFExploder {
 
     @Override
     public void flushIfNeeded() throws IOException {
-      if (currentFillSize > 0) out.write(buffer, 0, currentFillSize);
+      if (currentFillSize > 0) {
+        out.write(buffer, 0, currentFillSize);
+        currentFillSize = 0;
+      }
     }
 
     @Override

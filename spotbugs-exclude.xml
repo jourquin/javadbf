@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+  <!-- Existing protected API and process-wide default; changing visibility breaks subclasses. -->
+  <Match>
+    <Class name="edu.uclouvain.core.nodus.database.dbf.DBFBase"/>
+    <Field name="defaultCharset"/>
+    <Bug pattern="MS_PKGPROTECT"/>
+  </Match>
+  <!-- javac's try-with-resources cleanup emits redundant null checks on these known resources. -->
+  <Match>
+    <Class name="edu.uclouvain.core.nodus.database.dbf.DBFWriter"/>
+    <Method name="close"/>
+    <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+  </Match>
+</FindBugsFilter>

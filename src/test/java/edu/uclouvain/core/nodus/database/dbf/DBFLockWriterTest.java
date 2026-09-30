@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -36,7 +35,7 @@ public class DBFLockWriterTest {
   }
 
   @Test
-  public void testAppendingToExistingFile() throws IOException {
+  public void testOverwritingExistingFile() throws IOException {
 
     DBFField[] fields = createFields();
 
@@ -52,7 +51,9 @@ public class DBFLockWriterTest {
       DBFUtils.close(fos);
     }
 
+    // This fork's single-argument constructor overwrites; configure the new file explicitly.
     DBFLockWriter writerRandomAcces = new DBFLockWriter(outputFile);
+    writerRandomAcces.setFields(fields);
     for (int i = 0; i < 3; i++) {
       Object rowData[] = new Object[fields.length];
       rowData[0] = Integer.toString(i);

@@ -39,12 +39,9 @@ public class DBFLockWriter extends DBFWriter {
     if (this.isClosed()) {
       throw new IllegalStateException("You can add records a closed DBFWriter");
     }
-    try {
-      FileLock lock = this.getRamdonAccessFile().getChannel().lock();
+    try (FileLock lock = this.getRamdonAccessFile().getChannel().lock()) {
       super.addRecord(values);
-      if (lock.isValid()) {
-        lock.release();
-      }
+      flushRecords();
     } catch (IOException ioe) {
       throw new DBFException(ioe.getMessage(), ioe);
     }
@@ -58,9 +55,12 @@ public class DBFLockWriter extends DBFWriter {
 
     try {
       FileLock lock = this.getRamdonAccessFile().getChannel().lock();
-      super.close();
-      if (lock.isValid()) {
-        lock.release();
+      try {
+        super.close();
+      } finally {
+        if (lock.isValid()) {
+          lock.release();
+        }
       }
     } catch (IOException ioe) {
       throw new DBFException(ioe.getMessage(), ioe);

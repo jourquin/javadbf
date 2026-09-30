@@ -43,7 +43,7 @@ public final class DBFCharsetHelper {
    * @return Java charset, null if unknown.
    */
   public static Charset getCharsetByByte(int b) {
-    switch (b) {
+    switch (b & 0xff) {
       case 0x01:
         // U.S. MS-DOS
         return forName("IBM437");
@@ -93,7 +93,7 @@ public final class DBFCharsetHelper {
         return forName("windows-950");
       case 0x79:
         // Korean Windows
-        return Charset.forName("windows-949");
+        return forName("windows-949");
       case 0x7A:
         // Chinese (PRC, Singapore) Windows
         return forName("GBK");

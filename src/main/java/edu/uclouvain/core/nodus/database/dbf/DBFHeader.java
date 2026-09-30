@@ -41,8 +41,8 @@ public class DBFHeader {
   private byte month; /* 2 */
   private byte day; /* 3 */
   int numberOfRecords; /* 4-7 */
-  short headerLength; /* 8-9 */
-  short recordLength; /* 10-11 */
+  int headerLength; /* 8-9 */
+  int recordLength; /* 10-11 */
   private short reserv1; /* 12-13 */
   private byte incompleteTransaction; /* 14 */
   private byte encryptionFlag; /* 15 */
@@ -81,8 +81,8 @@ public class DBFHeader {
     this.day = dataInput.readByte(); /* 3 */
     this.numberOfRecords = DBFUtils.readLittleEndianInt(dataInput); /* 4-7 */
 
-    this.headerLength = DBFUtils.readLittleEndianShort(dataInput); /* 8-9 */
-    this.recordLength = DBFUtils.readLittleEndianShort(dataInput); /* 10-11 */
+    this.headerLength = DBFUtils.readLittleEndianShort(dataInput) & 0xffff; /* 8-9 */
+    this.recordLength = DBFUtils.readLittleEndianShort(dataInput) & 0xffff; /* 10-11 */
 
     this.reserv1 = DBFUtils.readLittleEndianShort(dataInput); /* 12-13 */
     this.incompleteTransaction = dataInput.readByte(); /* 14 */
@@ -104,7 +104,11 @@ public class DBFHeader {
       dataInput.readInt();
     }
 
+    if (headerLength < getTableHeaderSize() + 1 || recordLength < 1 || numberOfRecords < 0) {
+      throw new DBFException("Invalid DBF header dimensions");
+    }
     List<DBFField> v_fields = new ArrayList<>();
+    int maximumFields = (headerLength - getTableHeaderSize() - 1) / getFieldDescriptorSize();
 
     this.usedCharset = this.detectedCharset;
     if (charset != null) {
@@ -120,6 +124,9 @@ public class DBFHeader {
       while ((field =
               DBFField.createFieldDB7(dataInput, this.usedCharset, supportExtendedCharacterFields))
           != null) {
+        if (v_fields.size() >= maximumFields) {
+          throw new DBFException("Field descriptors exceed the DBF header length");
+        }
         v_fields.add(field);
       }
     } else {
@@ -129,6 +136,9 @@ public class DBFHeader {
               DBFField.createField(
                   dataInput, this.usedCharset, useFieldFlags, supportExtendedCharacterFields))
           != null) {
+        if (v_fields.size() >= maximumFields) {
+          throw new DBFException("Field descriptors exceed the DBF header length");
+        }
         v_fields.add(field);
       }
     }
@@ -150,8 +160,8 @@ public class DBFHeader {
     return this.signature == 0x2
         || this.signature == 0x30
         || this.signature == 0x31
-        || this.signature == 0xF5
-        || this.signature == 0xFB;
+        || (this.signature & 0xff) == 0xF5
+        || (this.signature & 0xff) == 0xFB;
   }
 
   int getTableHeaderSize() {
@@ -175,29 +185,19 @@ public class DBFHeader {
   void write(DataOutput dataOutput) throws IOException {
     dataOutput.writeByte(this.signature); /* 0 */
 
-    Calendar calendar = Calendar.getInstance();
-    this.year = (byte) (calendar.get(Calendar.YEAR) - 1900);
-    this.month = (byte) (calendar.get(Calendar.MONTH) + 1);
-    this.day = (byte) (calendar.get(Calendar.DAY_OF_MONTH));
+    writeRecordCountAndDate(dataOutput);
 
-    dataOutput.writeByte(this.year); /* 1 */
-    dataOutput.writeByte(this.month); /* 2 */
-    dataOutput.writeByte(this.day); /* 3 */
-
-    this.numberOfRecords = DBFUtils.littleEndian(this.numberOfRecords);
-    dataOutput.writeInt(this.numberOfRecords); /* 4-7 */
-
-    short oldHeaderLength = this.headerLength;
-    short newHeaderLength = findHeaderLength();
+    int oldHeaderLength = this.headerLength;
+    int newHeaderLength = findHeaderLength();
     if (oldHeaderLength == 0) {
       this.headerLength = newHeaderLength;
     } else if (newHeaderLength > oldHeaderLength) {
       throw new DBFException("Invalid header length");
     }
-    dataOutput.writeShort(DBFUtils.littleEndian(this.headerLength)); /* 8-9 */
+    dataOutput.writeShort(DBFUtils.littleEndian((short) this.headerLength)); /* 8-9 */
 
     this.recordLength = sumUpLenghtOfFields();
-    dataOutput.writeShort(DBFUtils.littleEndian(this.recordLength)); /* 10-11 */
+    dataOutput.writeShort(DBFUtils.littleEndian((short) this.recordLength)); /* 10-11 */
 
     dataOutput.writeShort(DBFUtils.littleEndian(this.reserv1)); /* 12-13 */
     dataOutput.writeByte(this.incompleteTransaction); /* 14 */
@@ -221,23 +221,39 @@ public class DBFHeader {
     dataOutput.writeByte(this.terminator1); /* n+1 */
   }
 
-  private short findHeaderLength() {
+  /** Updates only mutable metadata, preserving existing dialect-specific field descriptors. */
+  void writeRecordCountAndDate(DataOutput dataOutput) throws IOException {
+    Calendar calendar = Calendar.getInstance();
+    this.year = (byte) (calendar.get(Calendar.YEAR) - 1900);
+    this.month = (byte) (calendar.get(Calendar.MONTH) + 1);
+    this.day = (byte) (calendar.get(Calendar.DAY_OF_MONTH));
 
-    return (short)
-        (1 + 3 + 4 + 2 + 2 + 2 + 1 + 1 + 4 + 4 + 4 + 1 + 1 + 2 + (32 * this.fieldArray.length) + 1);
+    dataOutput.writeByte(this.year); /* 1 */
+    dataOutput.writeByte(this.month); /* 2 */
+    dataOutput.writeByte(this.day); /* 3 */
+
+    dataOutput.writeInt(DBFUtils.littleEndian(this.numberOfRecords)); /* 4-7 */
   }
 
-  private short sumUpLenghtOfFields() {
+  private int findHeaderLength() {
+
+    return 33 + 32 * this.fieldArray.length;
+  }
+
+  private int sumUpLenghtOfFields() {
     int sum = 0;
     for (DBFField field : this.fieldArray) {
       sum += field.getLength();
     }
-    return (short) (sum + 1);
+    if (sum >= 65535) {
+      throw new DBFException("DBF record length exceeds 65535 bytes");
+    }
+    return sum + 1;
   }
 
   /** @return The year the file was created */
   public int getYear() {
-    return 1900 + this.year;
+    return 1900 + (this.year & 0xff);
   }
   /** @return The month the file was created */
   public int getMonth() {
@@ -254,12 +270,13 @@ public class DBFHeader {
    * @return The date de file was created
    */
   public Date getLastModificationDate() {
-    if (this.year == 0 || this.month == 0 || this.day == 0) {
+    if (this.month == 0 || this.day == 0) {
       return null;
     }
     try {
       Calendar calendar = Calendar.getInstance();
-      calendar.set(this.year, this.month, this.day, 0, 0, 0);
+      calendar.setLenient(false);
+      calendar.set(getYear(), getMonth() - 1, getDay(), 0, 0, 0);
       calendar.set(Calendar.MILLISECOND, 0);
       return calendar.getTime();
     } catch (Exception e) {

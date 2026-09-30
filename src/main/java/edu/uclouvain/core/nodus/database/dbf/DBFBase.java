@@ -33,7 +33,6 @@ public abstract class DBFBase {
   protected static final Charset DEFAULT_CHARSET = StandardCharsets.UTF_8;
   protected static Charset defaultCharset = DEFAULT_CHARSET;
 
-
   protected DBFBase() {
     super();
   }
@@ -54,7 +53,6 @@ public abstract class DBFBase {
    * documentation of the class java.nio.charset.Charset
    *
    * @param charset charset to use
-   * 
    */
   public static void setCharset(Charset charset) {
     defaultCharset = charset;
@@ -83,6 +81,6 @@ public abstract class DBFBase {
    */
   @Deprecated
   public void setCharactersetName(String characterSetName) {
-    defaultCharset = Charset.forName(characterSetName);
+    setCharset(Charset.forName(characterSetName));
   }
 }

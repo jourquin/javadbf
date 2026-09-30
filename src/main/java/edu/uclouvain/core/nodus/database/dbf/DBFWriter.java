@@ -21,6 +21,7 @@ License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 package edu.uclouvain.core.nodus.database.dbf;
 
+import java.io.BufferedOutputStream;
 import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -28,9 +29,11 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.nio.channels.Channels;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -51,6 +54,10 @@ finally writing it to an OutputStream.
  * add them to the DBFWriter object<br>
  * add records using the addRecord() method and then<br>
  * call write() method.
+ *
+ * <p>File-backed writers buffer records in 64 KiB of memory and finalize the header on close.
+ * OutputStream-backed writers retain records in memory until close because their header cannot be
+ * rewritten.
  */
 public class DBFWriter extends DBFBase implements java.io.Closeable {
 
@@ -60,10 +67,12 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
   // Open and append records to an existing DBF
   private RandomAccessFile raf = null;
   private OutputStream outputStream = null;
+  private DataOutputStream recordOutput;
+  private DecimalFormat[] numericFormats;
+  private GregorianCalendar calendar;
 
   private boolean closed = false;
 
- 
   /**
    * Creates an empty DBFWriter.
    *
@@ -141,7 +150,7 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
    *     error occurs.
    */
   public DBFWriter(File dbfFile, Charset charset) {
-    this(dbfFile, true, null);
+    this(dbfFile, true, charset);
   }
 
   /**
@@ -160,7 +169,7 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
       try {
         Files.deleteIfExists(dbfFile.toPath());
       } catch (IOException e) {
-        e.printStackTrace();
+        throw new DBFException("Cannot overwrite " + dbfFile, e);
       }
     }
 
@@ -194,15 +203,24 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
       // position file pointer at the end of the raf
       // to ignore the END_OF_DATA byte at EoF
       // only if there are records,
-      if (this.raf.length() > header.headerLength) {
+      long recordEnd = header.headerLength + (long) header.numberOfRecords * header.recordLength;
+      if (this.raf.length() > recordEnd) {
         this.raf.seek(this.raf.length() - 1);
+        if (this.raf.readUnsignedByte() == END_OF_DATA) {
+          this.raf.seek(this.raf.length() - 1);
+        }
       } else {
         this.raf.seek(this.raf.length());
       }
     } catch (FileNotFoundException e) {
+      DBFUtils.close(this.raf);
       throw new DBFException("Specified file is not found. " + e.getMessage(), e);
     } catch (IOException e) {
+      DBFUtils.close(this.raf);
       throw new DBFException(e.getMessage() + " while reading header", e);
+    } catch (RuntimeException e) {
+      DBFUtils.close(this.raf);
+      throw e;
     }
 
     this.recordCount = this.header.numberOfRecords;
@@ -241,6 +259,9 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
       }
     }
     for (DBFField field : fields) {
+      if (field.getDBFType() == null || field.getName() == null || field.getLength() < 1) {
+        throw new DBFException("Incomplete field definition");
+      }
       if (!field.getDBFType().isWriteSupported()) {
         throw new DBFException(
             "Field "
@@ -332,12 +353,22 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
       this.v_records.add(values);
     } else {
       try {
-        writeRecord(this.raf, values);
+        if (this.recordOutput == null) {
+          this.recordOutput = createRecordOutput();
+        }
+        writeRecord(this.recordOutput, values);
         this.recordCount++;
       } catch (IOException e) {
         throw new DBFException("Error occured while writing record. " + e.getMessage(), e);
       }
     }
+  }
+
+  private DataOutputStream createRecordOutput() {
+    // The channel is owned by raf; close() flushes records before updating the header
+    // and closes raf, which also closes this channel.
+    return new DataOutputStream(
+        new BufferedOutputStream(Channels.newOutputStream(this.raf.getChannel()), 64 * 1024));
   }
 
   private void writeToStream(OutputStream out) {
@@ -368,25 +399,35 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
     this.closed = true;
     if (this.raf != null) {
       /*
-       * everything is written already. just update the header for
-       * record count and the END_OF_DATA mark
+       * Flush before seeking so buffered records cannot overwrite the header.
+       * Write EOF at the current record position, also when appending no records.
        */
-      try {
-        this.header.numberOfRecords = this.recordCount;
-        this.raf.seek(0);
-        this.header.write(this.raf);
-        this.raf.seek(this.raf.length());
+      try (RandomAccessFile file = this.raf) {
+        flushRecords();
         this.raf.writeByte(END_OF_DATA);
+        this.raf.setLength(this.raf.getFilePointer());
+        this.header.numberOfRecords = this.recordCount;
+        this.raf.seek(1);
+        this.header.writeRecordCountAndDate(this.raf);
       } catch (IOException e) {
         throw new DBFException(e.getMessage(), e);
       } finally {
-        DBFUtils.close(this.raf);
+        recordOutput = null;
+        numericFormats = null;
+        calendar = null;
       }
-    } else if (this.outputStream != null) {
-      try {
-        writeToStream(this.outputStream);
+    } else {
+      try (OutputStream out = this.outputStream) {
+        if (out != null) {
+          writeToStream(out);
+        }
+      } catch (IOException e) {
+        throw new DBFException(e.getMessage(), e);
       } finally {
-        DBFUtils.close(this.outputStream);
+        v_records = new ArrayList<>();
+        outputStream = null;
+        numericFormats = null;
+        calendar = null;
       }
     }
   }
@@ -413,7 +454,9 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
 
         case DATE:
           if (objectArray[j] != null) {
-            GregorianCalendar calendar = new GregorianCalendar();
+            if (calendar == null) {
+              calendar = new GregorianCalendar();
+            }
             calendar.setTime((Date) objectArray[j]);
             dataOutput.write(
                 String.valueOf(calendar.get(Calendar.YEAR)).getBytes(StandardCharsets.US_ASCII));
@@ -439,12 +482,21 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
         case NUMERIC:
         case FLOATING_POINT:
           if (objectArray[j] != null) {
+            if (numericFormats == null) {
+              numericFormats = new DecimalFormat[this.header.fieldArray.length];
+            }
+            if (numericFormats[j] == null) {
+              numericFormats[j] =
+                  DBFUtils.createDecimalFormat(
+                      this.header.fieldArray[j].getLength(),
+                      this.header.fieldArray[j].getDecimalCount());
+            }
             dataOutput.write(
                 DBFUtils.doubleFormating(
                     (Number) objectArray[j],
                     getCharset(),
                     this.header.fieldArray[j].getLength(),
-                    this.header.fieldArray[j].getDecimalCount()));
+                    numericFormats[j]));
           } else {
             dataOutput.write(
                 DBFUtils.textPadding(
@@ -477,6 +529,20 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
   }
 
   /**
+   * Flushes pending file records without finalizing the DBF header.
+   *
+   * <p>Subclasses that seek or lock the underlying file must flush before repositioning it or
+   * releasing their lock. The caller must hold any required lock during this call.
+   *
+   * @throws IOException if the buffered bytes cannot be written
+   */
+  protected void flushRecords() throws IOException {
+    if (this.recordOutput != null) {
+      this.recordOutput.flush();
+    }
+  }
+
+  /**
    * Check if the writer is closed
    *
    * @return true if already closed
@@ -486,7 +552,8 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
   }
 
   /**
-   * Get de underlying RandomAccessFile. It can be null if OutputStream constructor is used.
+   * Get the underlying RandomAccessFile. It can be null if OutputStream constructor is used. Call
+   * {@link #flushRecords()} before repositioning the file.
    *
    * @return the underlying RandomAccessFile
    */
@@ -502,6 +569,9 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
    */
   @Deprecated
   public void write(OutputStream out) {
+    if (closed) {
+      throw new IllegalStateException("Cannot write a closed DBFWriter");
+    }
     if (this.raf == null) {
       writeToStream(out);
     }
@@ -518,8 +588,7 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
   }
 
   /**
-   * ********************************************** 
-   * New methods added for Nodus API compatibility
+   * ********************************************** New methods added for Nodus API compatibility
    * **********************************************
    */
 
@@ -531,7 +600,12 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
    */
   public DBFWriter(String fileName, DBFField[] fields) {
     this(new File(fileName), true);
-    setFields(fields);
+    try {
+      setFields(fields);
+    } catch (RuntimeException e) {
+      DBFUtils.close(this.raf);
+      throw e;
+    }
   }
 
   /**
@@ -543,6 +617,11 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
    */
   public DBFWriter(String fileName, DBFField[] fields, Charset charset) {
     this(new File(fileName), true, charset);
-    setFields(fields);
+    try {
+      setFields(fields);
+    } catch (RuntimeException e) {
+      DBFUtils.close(this.raf);
+      throw e;
+    }
   }
 }

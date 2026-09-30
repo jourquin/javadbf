@@ -4,12 +4,10 @@ import edu.uclouvain.core.nodus.database.dbf.DBFException;
 import edu.uclouvain.core.nodus.database.dbf.DBFWriter;
 import edu.uclouvain.core.nodus.database.dbf.testutils.DbfToTxtTest;
 import edu.uclouvain.core.nodus.database.dbf.testutils.FileUtils;
-
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Date;
-
 import org.junit.Test;
 
 public class Bug33CorruptedSyncModeTest {
@@ -25,7 +23,7 @@ public class Bug33CorruptedSyncModeTest {
 
     FileUtils.copyFile(orig, tmp);
 
-    DBFWriter writer = new DBFWriter(tmp);
+    DBFWriter writer = new DBFWriter(tmp, false);
 
     Object rowData[] = new Object[21];
     rowData[0] = 702;
@@ -40,14 +38,14 @@ public class Bug33CorruptedSyncModeTest {
     rowData[9] = 80;
     rowData[10] = "09";
     rowData[11] = "LPG";
-    rowData[12] = new Double(0);
-    rowData[13] = new Double(0);
-    rowData[14] = new Double(3);
-    rowData[15] = new Double(0);
-    rowData[16] = new Double(0);
-    rowData[17] = new Double(0);
-    rowData[18] = new Double(0);
-    rowData[19] = new Double(0);
+    rowData[12] = Double.valueOf(0);
+    rowData[13] = Double.valueOf(0);
+    rowData[14] = Double.valueOf(3);
+    rowData[15] = Double.valueOf(0);
+    rowData[16] = Double.valueOf(0);
+    rowData[17] = Double.valueOf(0);
+    rowData[18] = Double.valueOf(0);
+    rowData[19] = Double.valueOf(0);
     rowData[20] = "";
 
     writer.addRecord(rowData);
