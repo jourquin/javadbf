@@ -190,7 +190,7 @@ public class DBFField {
         break;
       }
     }
-    field.name = new String(fieldName, 0, nameNullIndex, charset);
+    field.name = DBFUtils.decodeText(java.util.Arrays.copyOf(fieldName, nameNullIndex), charset);
     try {
       field.type = DBFDataType.fromCode(in.readByte()); /* 11 */
     } catch (Exception e) {
@@ -234,7 +234,7 @@ public class DBFField {
         break;
       }
     }
-    field.name = new String(fieldName, 0, nameNullIndex, charset);
+    field.name = DBFUtils.decodeText(java.util.Arrays.copyOf(fieldName, nameNullIndex), charset);
     try {
       field.type = DBFDataType.fromCode(in.readByte()); /* 32 */
     } catch (Exception e) {
@@ -275,7 +275,7 @@ public class DBFField {
    */
   protected void write(DataOutput out, Charset charset) throws IOException {
     // Field Name
-    byte[] fieldBytes = this.name.getBytes(charset);
+    byte[] fieldBytes = DBFUtils.encodeText(this.name, charset);
     if (fieldBytes.length > 10) {
       throw new IOException("NON-ASCII field name:" + name + " exceds allowed length");
     }

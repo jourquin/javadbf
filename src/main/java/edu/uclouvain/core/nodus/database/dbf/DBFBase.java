@@ -31,14 +31,31 @@ public abstract class DBFBase {
 
   protected static final int END_OF_DATA = 0x1A;
   protected static final Charset DEFAULT_CHARSET = StandardCharsets.UTF_8;
-  protected static Charset defaultCharset = DEFAULT_CHARSET;
+  protected static volatile Charset defaultCharset = DEFAULT_CHARSET;
+  private Charset effectiveCharset = defaultCharset;
+
+  /**
+   * Returns this reader or writer's charset, independently of other open files.
+   * @return the effective charset of this instance
+   */
+  public Charset getEffectiveCharset() {
+    return effectiveCharset;
+  }
+
+  /**
+   * Selects this instance's charset without changing the default for future instances.
+   * @param charset non-null effective charset
+   */
+  protected void setEffectiveCharset(Charset charset) {
+    effectiveCharset = java.util.Objects.requireNonNull(charset, "charset");
+  }
 
   protected DBFBase() {
     super();
   }
 
   /**
-   * Gets the charset used to read and write files.
+   * Gets the default charset for future readers and writers.
    *
    * @return charset used to read and write files
    */
@@ -46,7 +63,7 @@ public abstract class DBFBase {
     return defaultCharset;
   }
   /**
-   * Sets the charset to use to read and write files.
+   * Sets the default charset for future readers and writers.
    *
    * <p>If the library is used in a non-latin environment use this method to set corresponding
    * character set. More information: http://www.iana.org/assignments/character-sets Also see the
@@ -55,18 +72,18 @@ public abstract class DBFBase {
    * @param charset charset to use
    */
   public static void setCharset(Charset charset) {
-    defaultCharset = charset;
+    defaultCharset = java.util.Objects.requireNonNull(charset, "charset");
   }
 
   /**
    * Gets the charset used to read and write files.
    *
    * @return name of the charset
-   * @deprecated replaced by {@link DBFBase#getCharset()}
+   * @deprecated replaced by {@link DBFBase#getEffectiveCharset()}
    */
   @Deprecated
   public String getCharactersetName() {
-    return defaultCharset.displayName();
+    return effectiveCharset.displayName();
   }
 
   /**
@@ -77,10 +94,10 @@ public abstract class DBFBase {
    * documentation of the class java.nio.charset.Charset
    *
    * @param characterSetName name of the charset
-   * @deprecated replaced by {@link DBFBase#setCharset(Charset)}
+   * @deprecated supply the charset to the reader or writer constructor
    */
   @Deprecated
   public void setCharactersetName(String characterSetName) {
-    setCharset(Charset.forName(characterSetName));
+    setEffectiveCharset(Charset.forName(characterSetName));
   }
 }

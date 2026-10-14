@@ -18,8 +18,8 @@ public class Bug56Test {
     super();
   }
 
-  @Test
-  public void test() throws Exception {
+  @Test(expected = edu.uclouvain.core.nodus.database.dbf.DBFException.class)
+  public void testRejectsInvalidUtf16Encoding() throws Exception {
     Charset originalCharset = DBFBase.getCharset();
     DBFReader dbfReader = null;
     InputStream in = null;

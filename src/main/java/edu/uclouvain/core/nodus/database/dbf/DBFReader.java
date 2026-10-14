@@ -168,20 +168,20 @@ public class DBFReader extends DBFBase implements Closeable {
   /**
    * Intializes a DBFReader object.
    *
-   * <p>Tries to detect charset from file, if failed uses default charset ISO-8859-1 When this
+   * <p>Tries to detect charset from file, if failed uses default charset (UTF-8 unless changed) When this
    * constructor returns the object will have completed reading the header (meta date) and header
    * information can be queried there on. And it will be ready to return the first row.
    *
    * @param in the InputStream or canonical file name where the data is read from.
    */
   public DBFReader(Object in) {
-    this(in, defaultCharset, false);
+    this(in, (Charset) null, false);
   }
 
   /**
    * Intializes a DBFReader object.
    *
-   * <p>Tries to detect charset from file, if failed uses default charset ISO-8859-1 When this
+   * <p>Tries to detect charset from file, if failed uses default charset (UTF-8 unless changed) When this
    * constructor returns the object will have completed reading the header (meta date) and header
    * information can be queried there on. And it will be ready to return the first row.
    *
@@ -190,7 +190,7 @@ public class DBFReader extends DBFBase implements Closeable {
    */
   // TODO Change to boolean in 2.0
   public DBFReader(Object in, Boolean showDeletedRows) {
-    this(in, defaultCharset, showDeletedRows);
+    this(in, (Charset) null, showDeletedRows);
   }
 
   /**
@@ -255,8 +255,8 @@ public class DBFReader extends DBFBase implements Closeable {
       this.dataInputStream = new DataInputStream(this.inputStream);
       this.header = new DBFHeader();
       this.header.setSupportExtendedCharacterFields(supportExtendedCharacterFields);
-      this.header.read(this.dataInputStream, charset, showDeletedRows);
-      setCharset(this.header.getUsedCharset());
+      this.header.read(this.dataInputStream, charset, showDeletedRows, getEffectiveCharset());
+      setEffectiveCharset(this.header.getUsedCharset());
       /* it might be required to leap to the start of records at times */
       int fieldSize = this.header.getFieldDescriptorSize();
       int tableSize = this.header.getTableHeaderSize();
@@ -394,7 +394,7 @@ public class DBFReader extends DBFBase implements Closeable {
               byte[] value = java.util.Arrays.copyOf(data, length);
               record[column] =
                   field.getDBFType() == DBFDataType.VARCHAR
-                      ? new String(value, getCharset())
+                      ? DBFUtils.decodeText(value, getEffectiveCharset())
                       : value;
             }
           }
@@ -427,9 +427,9 @@ public class DBFReader extends DBFBase implements Closeable {
         byte b_array[] = new byte[field.getLength()];
         this.dataInputStream.readFully(b_array);
         if (this.trimRightSpaces) {
-          return new String(DBFUtils.trimRightSpaces(b_array), getCharset());
+          return DBFUtils.decodeText(DBFUtils.trimRightSpaces(b_array), getEffectiveCharset());
         } else {
-          return new String(b_array, getCharset());
+          return DBFUtils.decodeText(b_array, getEffectiveCharset());
         }
 
       case VARCHAR:
@@ -621,7 +621,7 @@ public class DBFReader extends DBFBase implements Closeable {
     if (closed) {
       throw new IllegalStateException("Cannot attach a memo file to a closed reader");
     }
-    this.memoFile = new DBFMemoFile(file, getCharset(), inMemory);
+    this.memoFile = new DBFMemoFile(file, getEffectiveCharset(), inMemory);
   }
 
   @Override

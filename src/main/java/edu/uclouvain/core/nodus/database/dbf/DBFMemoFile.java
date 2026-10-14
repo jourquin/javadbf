@@ -225,7 +225,7 @@ public class DBFMemoFile implements Closeable {
         }
         data = bytes.toByteArray();
       }
-      return usedType == DBFDataType.MEMO ? new String(data, charset) : data;
+      return usedType == DBFDataType.MEMO ? DBFUtils.decodeText(data, charset) : data;
     } catch (IOException ex) {
       throw new DBFException(ex.getMessage(), ex);
     }

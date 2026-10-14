@@ -73,6 +73,11 @@ public class DBFHeader {
   }
 
   void read(DataInput dataInput, Charset charset, boolean showDeletedRows) throws IOException {
+    read(dataInput, charset, showDeletedRows, DBFBase.getCharset());
+  }
+
+  void read(DataInput dataInput, Charset charset, boolean showDeletedRows, Charset fallback)
+      throws IOException {
 
     this.signature = dataInput.readByte(); /* 0 */
 
@@ -115,7 +120,7 @@ public class DBFHeader {
       this.usedCharset = charset;
     }
     if (this.usedCharset == null) {
-      this.usedCharset = DBFBase.defaultCharset;
+      this.usedCharset = fallback;
     }
 
     DBFField field = null;

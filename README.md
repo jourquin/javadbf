@@ -20,9 +20,9 @@ To build the distribution, including sources and Javadoc:
 JAVA_HOME=$(/usr/libexec/java_home -v 11) mvn clean package
 ```
 
-The three artifacts are `target/javadbf4nodus-1.12.3.jar`,
-`target/javadbf4nodus-1.12.3-sources.jar` and
-`target/javadbf4nodus-1.12.3-javadoc.jar`. Maven 3.6.3 or later is required by the
+The three artifacts are `target/javadbf4nodus-1.12.4.jar`,
+`target/javadbf4nodus-1.12.4-sources.jar` and
+`target/javadbf4nodus-1.12.4-javadoc.jar`. Maven 3.6.3 or later is required by the
 Javadoc plugin. Tests run during packaging; no signing key is needed for `package`.
 
 In Eclipse, register a native JDK 11 under **Settings/Preferences → Java → Installed
@@ -513,3 +513,20 @@ http://msdn.microsoft.com/en-us/library/st4a0s68%28VS.80%29.aspx
 
 
 
+
+## Encoding in 1.12.4
+
+Each reader and writer retains its own effective charset. `DBFBase.setCharset`
+sets the fallback for future instances; opening a file with another charset does
+not change that fallback or any other open file. Use `getEffectiveCharset()` to
+inspect a reader or writer. The deprecated instance charset setter affects only
+that instance and keeps a writer's header consistent.
+
+Readers without an explicit charset detect the DBF language driver, then use the
+configured fallback (UTF-8 initially). An explicit constructor charset takes
+precedence. Shapefile `.cpg` resolution belongs to the application; Nodus supplies
+the resolved per-file charset to this library.
+
+Text decoding and encoding reject malformed or unrepresentable characters with
+`DBFException`. Fixed-width character fields retain truncation behavior, cutting
+at whole Unicode code points within the available byte width.

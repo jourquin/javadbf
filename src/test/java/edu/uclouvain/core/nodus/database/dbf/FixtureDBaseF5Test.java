@@ -37,7 +37,7 @@ public class FixtureDBaseF5Test {
     InputStream inputStream = null;
     try {
       inputStream = new BufferedInputStream(new FileInputStream(file));
-      DBFReader reader = new DBFReader(inputStream);
+      DBFReader reader = new DBFReader(inputStream, java.nio.charset.StandardCharsets.ISO_8859_1);
       reader.setMemoFile(new File("src/test/resources/fixtures/dbase_f5.fpt"));
       DBFHeader header = reader.getHeader();
       Assert.assertNotNull(header);

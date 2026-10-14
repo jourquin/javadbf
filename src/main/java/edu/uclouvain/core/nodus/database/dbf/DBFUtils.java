@@ -30,6 +30,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.nio.charset.Charset;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.Arrays;
@@ -167,6 +170,41 @@ public final class DBFUtils {
   }
 
   /**
+   * Decodes text strictly so malformed bytes cannot silently become replacement characters.
+   * @param bytes encoded field text
+   * @param charset charset selected for this file
+   * @return decoded text
+   * @throws DBFException if the bytes cannot be decoded using that charset
+   */
+  public static String decodeText(byte[] bytes, Charset charset) {
+    try {
+      return charset.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+          .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
+    } catch (CharacterCodingException failure) {
+      throw new DBFException("Invalid text for DBF charset " + charset.name(), failure);
+    }
+  }
+
+  /**
+   * Encodes text strictly so unrepresentable characters cannot silently become question marks.
+   * @param text field text
+   * @param charset charset selected for this file
+   * @return encoded bytes
+   * @throws DBFException for malformed or unrepresentable characters
+   */
+  public static byte[] encodeText(String text, Charset charset) {
+    try {
+      ByteBuffer buffer = charset.newEncoder().onMalformedInput(CodingErrorAction.REPORT)
+          .onUnmappableCharacter(CodingErrorAction.REPORT).encode(java.nio.CharBuffer.wrap(text));
+      byte[] bytes = new byte[buffer.remaining()];
+      buffer.get(bytes);
+      return bytes;
+    } catch (CharacterCodingException failure) {
+      throw new DBFException("Text cannot be encoded with DBF charset " + charset.name(), failure);
+    }
+  }
+
+  /**
    * pad a string and convert it to byte[] to write to a dbf file (by default, add whitespaces to
    * the end of the string)
    *
@@ -193,21 +231,21 @@ public final class DBFUtils {
       String text, Charset charset, int length, DBFAlignment alignment, byte paddingByte) {
     byte response[] = new byte[length];
     Arrays.fill(response, paddingByte);
-    byte[] stringBytes = text.getBytes(charset);
+    byte[] stringBytes = encodeText(text, charset);
 
     if (stringBytes.length > length) {
       // Find the longest fitting prefix without recursively copying successively shorter strings.
       int low = 0;
-      int high = text.length();
+      int high = text.codePointCount(0, text.length());
       while (low < high) {
         int middle = low + (high - low + 1) / 2;
-        if (text.substring(0, middle).getBytes(charset).length <= length) {
+        if (encodeText(text.substring(0, text.offsetByCodePoints(0, middle)), charset).length <= length) {
           low = middle;
         } else {
           high = middle - 1;
         }
       }
-      stringBytes = text.substring(0, low).getBytes(charset);
+      stringBytes = encodeText(text.substring(0, text.offsetByCodePoints(0, low)), charset);
     }
 
     int t_offset = 0;

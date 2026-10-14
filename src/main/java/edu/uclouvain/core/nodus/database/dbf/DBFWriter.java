@@ -91,13 +91,13 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
   @Deprecated
   public DBFWriter(Charset charset) {
     super();
-    setCharset(charset);
+    setEffectiveCharset(charset == null ? getEffectiveCharset() : charset);
     this.header = new DBFHeader();
-    this.header.setUsedCharset(charset);
+    this.header.setUsedCharset(getEffectiveCharset());
   }
 
   /**
-   * Creates a DBFWriter which write data to the given OutputStream. Uses default charset iso-8859-1
+   * Creates a DBFWriter which write data to the given OutputStream. Uses default charset (UTF-8 unless changed)
    *
    * @param out stream to write the data to.
    */
@@ -112,9 +112,9 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
    */
   public DBFWriter(OutputStream out, Charset charset) {
     super();
-    setCharset(charset);
+    setEffectiveCharset(charset == null ? getEffectiveCharset() : charset);
     this.header = new DBFHeader();
-    this.header.setUsedCharset(charset);
+    this.header.setUsedCharset(getEffectiveCharset());
     this.outputStream = out;
   }
 
@@ -188,17 +188,17 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
               throw new DBFException("Unssuported charset " + charset);
             }
           }
-          setCharset(charset);
-          this.header.setUsedCharset(charset);
+          setEffectiveCharset(charset == null ? getEffectiveCharset() : charset);
+          this.header.setUsedCharset(getEffectiveCharset());
         } else {
-          setCharset(defaultCharset);
-          this.header.setUsedCharset(defaultCharset);
+          setEffectiveCharset(getEffectiveCharset());
+          this.header.setUsedCharset(getEffectiveCharset());
         }
         return;
       }
 
-      this.header.read(this.raf, charset, false);
-      setCharset(this.header.getUsedCharset());
+      this.header.read(this.raf, charset, false, getEffectiveCharset());
+      setEffectiveCharset(this.header.getUsedCharset());
 
       // position file pointer at the end of the raf
       // to ignore the END_OF_DATA byte at EoF
@@ -224,6 +224,15 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
     }
 
     this.recordCount = this.header.numberOfRecords;
+  }
+
+  /** Keeps the header's language driver consistent with legacy instance charset changes. */
+  @Override
+  protected void setEffectiveCharset(Charset charset) {
+    super.setEffectiveCharset(charset);
+    if (this.header != null) {
+      this.header.setUsedCharset(charset);
+    }
   }
 
   /**
@@ -445,7 +454,7 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
           dataOutput.write(
               DBFUtils.textPadding(
                   strValue,
-                  getCharset(),
+                  getEffectiveCharset(),
                   this.header.fieldArray[j].getLength(),
                   DBFAlignment.LEFT,
                   (byte) ' '));
@@ -494,14 +503,14 @@ public class DBFWriter extends DBFBase implements java.io.Closeable {
             dataOutput.write(
                 DBFUtils.doubleFormating(
                     (Number) objectArray[j],
-                    getCharset(),
+                    getEffectiveCharset(),
                     this.header.fieldArray[j].getLength(),
                     numericFormats[j]));
           } else {
             dataOutput.write(
                 DBFUtils.textPadding(
                     " ",
-                    getCharset(),
+                    getEffectiveCharset(),
                     this.header.fieldArray[j].getLength(),
                     DBFAlignment.RIGHT,
                     (byte) ' '));

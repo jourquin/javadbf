@@ -37,6 +37,11 @@ public class Bug60FieldLengthTest {
   @Test
   public void testPrint() throws FileNotFoundException {
     File testFile = new File("src/test/resources/bug-60-fieldlength/060.dbf");
-    DbfToTxtTest.writeToConsole(testFile);
+    try (DBFReader reader = new DBFReader(new FileInputStream(testFile),
+        java.nio.charset.StandardCharsets.ISO_8859_1)) {
+      while (reader.hasNextRecord()) {
+        Assert.assertNotNull(reader.nextRecord());
+      }
+    }
   }
 }

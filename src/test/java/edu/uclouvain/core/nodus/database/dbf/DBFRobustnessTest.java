@@ -323,7 +323,7 @@ public class DBFRobustnessTest {
   }
 
   @Test
-  public void longTextTruncationMatchesLegacyBytesWithoutRecursion() {
+  public void longTextTruncationPreservesCodePointsAndRejectsUnrepresentableText() {
     String[] texts = {"été東京😀", "abc", "\ud800z"};
     Charset[] charsets = {
       StandardCharsets.UTF_8,
@@ -332,17 +332,27 @@ public class DBFRobustnessTest {
       Charset.forName("windows-1251")
     };
     for (Charset charset : charsets)
-      for (String text : texts)
+      for (String text : texts) {
+        if (!charset.newEncoder().canEncode(text)) {
+          try {
+            DBFUtils.textPadding(text, charset, 10);
+            org.junit.Assert.fail("Unrepresentable or malformed text must be rejected");
+          } catch (DBFException expected) {
+            // Strict encoding is independent of the field's available byte width.
+          }
+          continue;
+        }
         for (int length = 0; length < 20; length++) {
           String prefix = text;
           while (prefix.getBytes(charset).length > length)
-            prefix = prefix.substring(0, prefix.length() - 1);
+            prefix = prefix.substring(0, prefix.offsetByCodePoints(prefix.length(), -1));
           byte[] expected = new byte[length];
           Arrays.fill(expected, (byte) ' ');
           byte[] encoded = prefix.getBytes(charset);
           System.arraycopy(encoded, 0, expected, 0, encoded.length);
           assertArrayEquals(expected, DBFUtils.textPadding(text, charset, length));
         }
+      }
     char[] longText = new char[100000];
     Arrays.fill(longText, 'x');
     assertEquals(
